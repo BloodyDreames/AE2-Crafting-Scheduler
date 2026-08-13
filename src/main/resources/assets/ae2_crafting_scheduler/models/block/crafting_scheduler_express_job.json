@@ -1,0 +1,7 @@
+{
+  "parent": "ae2_crafting_scheduler:block/crafting_scheduler_base",
+  "textures": {
+    "front": "ae2_crafting_scheduler:block/crafting_scheduler_front_express_job",
+    "back": "ae2_crafting_scheduler:block/crafting_scheduler_back_express_job"
+  }
+}

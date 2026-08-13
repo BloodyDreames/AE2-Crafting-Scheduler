@@ -1,0 +1,33 @@
+{
+  "variants": {
+    "facing=north,state=offline": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_offline" },
+    "facing=east,state=offline": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_offline", "y": 90 },
+    "facing=south,state=offline": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_offline", "y": 180 },
+    "facing=west,state=offline": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_offline", "y": 270 },
+
+    "facing=north,state=active": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_active" },
+    "facing=east,state=active": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_active", "y": 90 },
+    "facing=south,state=active": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_active", "y": 180 },
+    "facing=west,state=active": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_active", "y": 270 },
+
+    "facing=north,state=pausing": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_pausing" },
+    "facing=east,state=pausing": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_pausing", "y": 90 },
+    "facing=south,state=pausing": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_pausing", "y": 180 },
+    "facing=west,state=pausing": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_pausing", "y": 270 },
+
+    "facing=north,state=paused": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_paused" },
+    "facing=east,state=paused": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_paused", "y": 90 },
+    "facing=south,state=paused": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_paused", "y": 180 },
+    "facing=west,state=paused": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_paused", "y": 270 },
+
+    "facing=north,state=express_job": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_express_job" },
+    "facing=east,state=express_job": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_express_job", "y": 90 },
+    "facing=south,state=express_job": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_express_job", "y": 180 },
+    "facing=west,state=express_job": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_express_job", "y": 270 },
+
+    "facing=north,state=error": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_error" },
+    "facing=east,state=error": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_error", "y": 90 },
+    "facing=south,state=error": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_error", "y": 180 },
+    "facing=west,state=error": { "model": "ae2_crafting_scheduler:block/crafting_scheduler_error", "y": 270 }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "ae2_crafting_scheduler:block/crafting_scheduler_side",
+    "down": "ae2_crafting_scheduler:block/crafting_scheduler_side",
+    "up": "ae2_crafting_scheduler:block/crafting_scheduler_top",
+    "north": "#front",
+    "south": "#back",
+    "west": "ae2_crafting_scheduler:block/crafting_scheduler_side",
+    "east": "ae2_crafting_scheduler:block/crafting_scheduler_side"
+  }
+}

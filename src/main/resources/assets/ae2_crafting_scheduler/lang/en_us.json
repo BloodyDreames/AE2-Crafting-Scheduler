@@ -1,0 +1,41 @@
+{
+  "block.ae2_crafting_scheduler.crafting_scheduler": "Crafting Scheduler",
+  "itemGroup.ae2_crafting_scheduler": "AE2: Crafting Scheduler",
+
+  "gui.ae2_crafting_scheduler.status": "Status: %s",
+  "gui.ae2_crafting_scheduler.status.active": "ACTIVE",
+  "gui.ae2_crafting_scheduler.status.offline": "OFFLINE",
+  "gui.ae2_crafting_scheduler.counts": "Managed CPUs: %s   Active: %s   Paused: %s",
+  "gui.ae2_crafting_scheduler.preemption": "Express preemption: %s  (max %s ops, pause above %s ops)",
+  "gui.ae2_crafting_scheduler.on": "ON",
+  "gui.ae2_crafting_scheduler.off": "OFF",
+  "gui.ae2_crafting_scheduler.redstone_label": "Redstone: %s (click to change)",
+  "gui.ae2_crafting_scheduler.redstone.ignore": "Ignore Redstone",
+  "gui.ae2_crafting_scheduler.redstone.active_with_signal": "Active With Signal",
+  "gui.ae2_crafting_scheduler.redstone.active_without_signal": "Active Without Signal",
+
+  "gui.ae2_crafting_scheduler.no_cpus": "No Crafting CPUs on this network.",
+  "gui.ae2_crafting_scheduler.idle": "Idle",
+  "gui.ae2_crafting_scheduler.paused_job": "Paused: %s",
+  "gui.ae2_crafting_scheduler.cpu_specs": "%s Storage, %s Co-Processors",
+  "gui.ae2_crafting_scheduler.foreign_cpu": "Third-party Crafting CPU",
+
+  "gui.ae2_crafting_scheduler.tooltip_active": "Running: %s — %s%% (%s operations)",
+  "gui.ae2_crafting_scheduler.tooltip_paused": "Held: %s — %s%% (%s operations)",
+  "gui.ae2_crafting_scheduler.tooltip_in_flight": "%s operations still in flight from before the pause",
+  "gui.ae2_crafting_scheduler.tooltip_cancel_express": "Right-click: cancel the express job and resume immediately",
+  "gui.ae2_crafting_scheduler.tooltip_unsupported": "This CPU cannot be paused safely and will never be touched.",
+
+  "gui.ae2_crafting_scheduler.cpu_state.idle": "IDLE",
+  "gui.ae2_crafting_scheduler.cpu_state.running": "RUNNING",
+  "gui.ae2_crafting_scheduler.cpu_state.pause_requested": "PAUSING",
+  "gui.ae2_crafting_scheduler.cpu_state.draining_in_flight_work": "DRAINING",
+  "gui.ae2_crafting_scheduler.cpu_state.paused": "PAUSED",
+  "gui.ae2_crafting_scheduler.cpu_state.running_express_job": "EXPRESS",
+  "gui.ae2_crafting_scheduler.cpu_state.express_completed": "EXPRESS DONE",
+  "gui.ae2_crafting_scheduler.cpu_state.restoring": "RESTORING",
+  "gui.ae2_crafting_scheduler.cpu_state.resumed": "RESUMED",
+  "gui.ae2_crafting_scheduler.cpu_state.error": "ERROR",
+  "gui.ae2_crafting_scheduler.cpu_state.unavailable": "UNAVAILABLE",
+  "gui.ae2_crafting_scheduler.cpu_state.unsupported": "UNSUPPORTED"
+}

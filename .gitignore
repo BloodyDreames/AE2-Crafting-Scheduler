@@ -1,0 +1,54 @@
+# Gradle and Java
+/.gradle/
+/build/
+/out/
+/repo/
+*.class
+hs_err_pid*
+replay_pid*
+
+# IDEs and editors
+/.idea/
+/.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Minecraft development environments
+/run/
+/run-server/
+/run-gametest/
+/run-data/
+/logs/
+/crash-reports/
+
+# Local design inputs
+/123/
+
+# Generated data
+/src/generated/
+
+# Dependencies are resolved from Maven Central
+/libs/*.jar
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+
+# Temporary files
+*.log
+*.log.gz
+*.tmp
+*.bak
+
+# Operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
