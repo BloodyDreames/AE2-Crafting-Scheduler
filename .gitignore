@@ -1,37 +1,21 @@
-# Gradle and Java
 /.gradle/
 /build/
 /out/
 /repo/
-*.class
-hs_err_pid*
-replay_pid*
-
-# IDEs and editors
 /.idea/
 /.vscode/
 *.iml
 *.ipr
 *.iws
-
-# Minecraft development environments
 /run/
 /run-server/
 /run-gametest/
 /run-data/
 /logs/
 /crash-reports/
-
-# Local design inputs
 /123/
-
-# Generated data
 /src/generated/
-
-# Dependencies are resolved from Maven Central
-/libs/*.jar
-
-# Local configuration and secrets
+/libs/
 .env
 .env.*
 !.env.example
@@ -41,14 +25,13 @@ replay_pid*
 *.p12
 *.pem
 *.key
-
-# Temporary files
+*.class
 *.log
 *.log.gz
 *.tmp
 *.bak
-
-# Operating systems
+hs_err_pid*
+replay_pid*
 .DS_Store
 Thumbs.db
 desktop.ini
