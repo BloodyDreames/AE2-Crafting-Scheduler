@@ -29,6 +29,7 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.crafting.execution.CraftingCpuLogic;
+import appeng.crafting.execution.CraftingSubmitResult;
 import appeng.crafting.execution.ExecutingCraftingJob;
 import appeng.crafting.inv.ListCraftingInventory;
 import appeng.me.cluster.implementations.CraftingCPUCluster;
@@ -138,6 +139,10 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
     @Unique
     private boolean acs$rehydrating;
 
+    /** True only around the Scheduler's atomic submit into a reserved active slot. */
+    @Unique
+    private boolean acs$expressSubmitPermit;
+
     /** Amounts {@code insert} was called with, innermost last. See {@link #acs$captureInsertAmount}. */
     @Unique
     private final LongArrayList acs$offeredAmounts = new LongArrayList(4);
@@ -207,6 +212,26 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         }
         cluster.markDirty();
         return true;
+    }
+
+    @Override
+    public ICraftingSubmitResult acs$submitExpress(IGrid grid, ICraftingPlan plan, IActionSource src,
+            @Nullable ICraftingRequester requester) {
+        if (acs$parkedJob == null) {
+            return CraftingSubmitResult.CPU_BUSY;
+        }
+
+        acs$expressSubmitPermit = true;
+        try {
+            return ((CraftingCpuLogic) (Object) this).trySubmitJob(grid, plan, src, requester);
+        } finally {
+            acs$expressSubmitPermit = false;
+        }
+    }
+
+    @Override
+    public boolean acs$hasActiveJob() {
+        return job != null;
     }
 
     @Override
@@ -497,6 +522,15 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         var result = cir.getReturnValue();
         if (result != null && result.successful() && job != null) {
             acs$activeComplexity = PlanComplexity.operations(plan);
+        }
+    }
+
+    /** A parked job owns this CPU until it is restored; only {@link #acs$submitExpress} may reuse it. */
+    @Inject(method = "trySubmitJob", at = @At("HEAD"), cancellable = true)
+    private void acs$rejectSubmitIntoReservedCpu(IGrid grid, ICraftingPlan plan, IActionSource src,
+            ICraftingRequester requester, CallbackInfoReturnable<ICraftingSubmitResult> cir) {
+        if (acs$parkedJob != null && !acs$expressSubmitPermit) {
+            cir.setReturnValue(CraftingSubmitResult.CPU_BUSY);
         }
     }
 

@@ -356,7 +356,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
             }
 
             var session = new PreemptionSession(key);
-            session.state = cluster.isBusy() ? ManagedCpuState.RUNNING_EXPRESS_JOB
+            session.state = park.acs$hasActiveJob() ? ManagedCpuState.RUNNING_EXPRESS_JOB
                     : ManagedCpuState.EXPRESS_COMPLETED;
             session.pausedComplexity = park.acs$getParkedComplexity();
             sessions.put(key, session);
@@ -398,7 +398,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
 
         switch (session.state) {
             case PAUSE_REQUESTED, RUNNING_EXPRESS_JOB -> {
-                if (cluster.isBusy()) {
+                if (park.acs$hasActiveJob()) {
                     session.state = ManagedCpuState.RUNNING_EXPRESS_JOB;
                     session.expressTicks++;
 
@@ -421,7 +421,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
                     .setState(session.inFlight > 0 ? ManagedCpuState.DRAINING_IN_FLIGHT_WORK
                             : ManagedCpuState.PAUSED);
             case DRAINING_IN_FLIGHT_WORK, PAUSED -> {
-                if (cluster.isBusy()) {
+                if (park.acs$hasActiveJob()) {
                     // Something claimed the CPU again (a new express job, or a job placed by AE2 in the
                     // window where the CPU was free). Wait for it rather than fighting over the slot.
                     session.setState(ManagedCpuState.RUNNING_EXPRESS_JOB);
@@ -432,7 +432,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
             case RESTORING -> {
                 if (!cluster.isActive()) {
                     session.fail("CPU is offline");
-                } else if (cluster.isBusy()) {
+                } else if (park.acs$hasActiveJob()) {
                     session.fail("CPU became busy again");
                 } else if (park.acs$unpark()) {
                     SchedulerLog.debug("Resume successful on CPU {}", session.cpu());
@@ -508,7 +508,12 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
      * interrupting. Ordering is deterministic so the same situation always produces the same choice.
      */
     @Nullable
-    public CraftingCPUCluster selectVictim(IGrid grid, ICraftingPlan plan, PlanComplexity complexity) {
+    public CraftingCPUCluster selectVictim(IGrid grid, ICraftingPlan plan, PlanComplexity complexity,
+            boolean playerInitiated) {
+        if (!hasPreemptionCapacity()) {
+            return null;
+        }
+
         var candidates = new ArrayList<CraftingCPUCluster>();
 
         for (var cpu : grid.getCraftingService().getCpus()) {
@@ -516,7 +521,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
                 continue;
             }
             var key = cluster.getBoundsMin();
-            var reason = rejectVictim(cluster, key, plan);
+            var reason = rejectVictim(cluster, key, plan, playerInitiated);
             if (reason != null) {
                 SchedulerLog.debug("CPU {} is not a preemption candidate: {}", key, reason);
                 continue;
@@ -541,9 +546,27 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
         return candidates.get(0);
     }
 
+    /**
+     * Checks the same conditions used by an actual preemption without changing either job.
+     *
+     * <p>
+     * The AE2 confirmation menu uses this to keep a busy CPU selectable only when pressing Start can
+     * really hand that CPU to this Scheduler. Keeping this predicate beside {@link #rejectVictim}
+     * prevents the menu and the submit path from drifting apart.
+     */
+    public boolean canPreempt(CraftingCPUCluster cluster, ICraftingPlan plan, boolean playerInitiated) {
+        return hasPreemptionCapacity()
+                && rejectVictim(cluster, cluster.getBoundsMin(), plan, playerInitiated) == null;
+    }
+
+    private boolean hasPreemptionCapacity() {
+        return sessions.size() < SchedulerConfig.maxPausedJobsPerScheduler();
+    }
+
     /** @return why this CPU may not be paused for {@code plan}, or null if it may. */
     @Nullable
-    private String rejectVictim(CraftingCPUCluster cluster, BlockPos key, ICraftingPlan plan) {
+    private String rejectVictim(CraftingCPUCluster cluster, BlockPos key, ICraftingPlan plan,
+            boolean playerInitiated) {
         if (!managedCpus.contains(key)) {
             return "not managed by this Scheduler";
         }
@@ -569,7 +592,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
                     + " bytes)";
         }
         var complexity = park.acs$getActiveComplexity();
-        if (complexity < SchedulerConfig.minimumJobComplexityForPreemption()) {
+        if (!playerInitiated && complexity < SchedulerConfig.minimumJobComplexityForPreemption()) {
             return "its job is only " + complexity + " operations, below the "
                     + SchedulerConfig.minimumJobComplexityForPreemption() + " needed to interrupt it";
         }
@@ -623,7 +646,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
         SchedulerLog.debug("Job safely paused, {} operations still in flight", park.acs$getParkedInFlightCount());
         SchedulerLog.debug("Starting express job: {}", describe(plan.finalOutput()));
 
-        var result = cluster.submitJob(grid, plan, src, requester);
+        var result = park.acs$submitExpress(grid, plan, src, requester);
         if (result == null || !result.successful()) {
             // Roll the pause back completely; the player sees AE2's original error instead.
             SchedulerLog.debug("Express job was rejected ({}); resuming the original job immediately",
@@ -677,7 +700,7 @@ public class SchedulerBlockEntity extends BlockEntity implements IInWorldGridNod
         }
 
         SchedulerLog.debug("Restoring original crafting state on CPU {} ({})", cpu, reason);
-        if (cluster.isBusy()) {
+        if (park.acs$hasActiveJob()) {
             cluster.cancelJob();
         }
         if (!park.acs$unpark()) {
