@@ -42,7 +42,7 @@ public abstract class CraftingBlockEntityMixin {
 
         // An express job may be occupying the slot the paused job needs. Cancelling it returns its own
         // items to the network the way AE2 always does when a CPU is destroyed.
-        if (cluster.isBusy()) {
+        if (parkable.acs$hasActiveJob()) {
             cluster.cancelJob();
         }
 

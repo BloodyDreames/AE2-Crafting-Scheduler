@@ -4,6 +4,11 @@ import java.util.UUID;
 
 import org.jetbrains.annotations.Nullable;
 
+import appeng.api.networking.IGrid;
+import appeng.api.networking.crafting.ICraftingPlan;
+import appeng.api.networking.crafting.ICraftingRequester;
+import appeng.api.networking.crafting.ICraftingSubmitResult;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.GenericStack;
 
 /**
@@ -56,6 +61,16 @@ public interface ParkableCpu {
      * @return false if there is nothing parked, or the CPU is busy with another job.
      */
     boolean acs$unpark();
+
+    /**
+     * Submits the one express job that is allowed to use the active slot while a park is present.
+     * Every ordinary submit remains blocked by the park's reservation.
+     */
+    ICraftingSubmitResult acs$submitExpress(IGrid grid, ICraftingPlan plan, IActionSource src,
+            @Nullable ICraftingRequester requester);
+
+    /** Whether the normal active slot currently contains the express job. */
+    boolean acs$hasActiveJob();
 
     /**
      * Cancels the parked job the way AE2 cancels a running one: the link is cancelled and every held

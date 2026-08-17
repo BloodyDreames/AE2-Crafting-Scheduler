@@ -60,8 +60,9 @@ public final class SchedulerConfig {
 
         MINIMUM_JOB_COMPLEXITY_FOR_PREEMPTION = builder
                 .comment(
-                        "A running job is only ever paused when its estimated operation count is at least this",
-                        "high. Prevents a nearly-finished small job from being interrupted.")
+                        "An automatic machine request only pauses a running job when its estimated operation",
+                        "count is at least this high. Prevents automation from repeatedly interrupting small",
+                        "jobs. A player explicitly pressing Start may still use a managed CPU below this limit.")
                 .defineInRange("minimumJobComplexityForPreemption", 1000, 1, Integer.MAX_VALUE);
 
         builder.pop();

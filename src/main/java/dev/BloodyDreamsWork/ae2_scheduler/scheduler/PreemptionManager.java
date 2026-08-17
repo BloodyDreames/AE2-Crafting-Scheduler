@@ -85,6 +85,7 @@ public final class PreemptionManager {
         // The player may have pinned the request to one specific CPU in the terminal. Respect that:
         // pausing a different CPU would put the job somewhere they did not ask for.
         var pinned = target instanceof CraftingCPUCluster cluster ? cluster : null;
+        boolean playerInitiated = src.player().isPresent();
 
         for (var scheduler : schedulers) {
             if (!scheduler.isOperational()) {
@@ -94,11 +95,11 @@ public final class PreemptionManager {
             CraftingCPUCluster victim;
             if (pinned != null) {
                 victim = scheduler.manages(pinned.getBoundsMin()) ? pinned : null;
-                if (victim != null && !isViableVictim(scheduler, victim, plan)) {
+                if (victim != null && !isViableVictim(scheduler, victim, plan, playerInitiated)) {
                     victim = null;
                 }
             } else {
-                victim = scheduler.selectVictim(grid, plan, complexity);
+                victim = scheduler.selectVictim(grid, plan, complexity, playerInitiated);
             }
 
             if (victim == null) {
@@ -119,22 +120,41 @@ public final class PreemptionManager {
         return null;
     }
 
+    /**
+     * Whether the confirmation menu may present a busy CPU as a valid destination for this plan.
+     *
+     * <p>
+     * AE2 normally removes every busy CPU from the confirmation menu before the player can press
+     * Start. A Scheduler can make one of those CPUs available atomically, but the menu must only
+     * bypass AE2's filter when the exact same server-side preemption checks would accept it.
+     */
+    public static boolean canPreempt(IGrid grid, ICraftingPlan plan, ICraftingCPU target, IActionSource src) {
+        if (grid == null || plan == null || target == null || src == null) {
+            return false;
+        }
+        if (!SchedulerConfig.isLoaded() || !SchedulerConfig.enableScheduler()
+                || !SchedulerConfig.allowAutomaticPreemption() || plan.simulation()) {
+            return false;
+        }
+        if (PlanComplexity.operations(plan) > SchedulerConfig.maxExpressComplexity()) {
+            return false;
+        }
+        if (!(target instanceof CraftingCPUCluster cluster)) {
+            return false;
+        }
+
+        boolean playerInitiated = src.player().isPresent();
+        for (var scheduler : grid.getMachines(SchedulerBlockEntity.class)) {
+            if (scheduler.isOperational() && scheduler.canPreempt(cluster, plan, playerInitiated)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The subset of {@link SchedulerBlockEntity#selectVictim} checks that apply to a pinned CPU. */
     private static boolean isViableVictim(SchedulerBlockEntity scheduler, CraftingCPUCluster cluster,
-            ICraftingPlan plan) {
-        var park = CpuKey.parkable(cluster);
-        if (park == null || park.acs$isParked() || park.acs$getParkOwner() != null) {
-            return false;
-        }
-        if (scheduler.getSession(cluster.getBoundsMin()) != null) {
-            return false;
-        }
-        if (!cluster.isActive() || !cluster.isBusy()) {
-            return false;
-        }
-        if (cluster.getAvailableStorage() < plan.bytes()) {
-            return false;
-        }
-        return park.acs$getActiveComplexity() >= SchedulerConfig.minimumJobComplexityForPreemption();
+            ICraftingPlan plan, boolean playerInitiated) {
+        return scheduler.canPreempt(cluster, plan, playerInitiated);
     }
 }
