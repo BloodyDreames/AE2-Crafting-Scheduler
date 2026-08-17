@@ -19,20 +19,7 @@ import appeng.me.cluster.implementations.CraftingCPUCluster;
 import dev.BloodyDreamsWork.ae2_scheduler.SchedulerConfig;
 import dev.BloodyDreamsWork.ae2_scheduler.SchedulerLog;
 
-/**
- * Decides whether a crafting request AE2 could not place should jump the queue.
- *
- * <p>
- * This runs at the tail of {@code CraftingService.submitJob}, i.e. only after AE2's own scheduling has
- * already failed. When no Scheduler is present, none manages a suitable CPU, or preemption is off, the
- * original AE2 result is returned untouched and AE2 behaves exactly as it does without this mod.
- */
 public final class PreemptionManager {
-
-    /**
-     * The failures that mean "there was simply no free CPU". Anything else (an incomplete plan, a
-     * missing ingredient, an offline CPU) is a real problem that pausing another job would not fix.
-     */
     private static final Set<CraftingSubmitErrorCode> PREEMPTABLE_FAILURES = EnumSet.of(
             CraftingSubmitErrorCode.NO_CPU_FOUND,
             CraftingSubmitErrorCode.NO_SUITABLE_CPU_FOUND,
@@ -41,15 +28,10 @@ public final class PreemptionManager {
     private PreemptionManager() {
     }
 
-    /**
-     * @param originalResult what AE2 decided on its own.
-     * @return a replacement result when a preemption happened, or null to keep AE2's result.
-     */
     @Nullable
     public static ICraftingSubmitResult offer(IGrid grid, ICraftingPlan plan,
             @Nullable ICraftingRequester requester, @Nullable ICraftingCPU target, IActionSource src,
             ICraftingSubmitResult originalResult) {
-
         if (!SchedulerConfig.isLoaded() || !SchedulerConfig.enableScheduler()
                 || !SchedulerConfig.allowAutomaticPreemption()) {
             return null;
@@ -74,16 +56,12 @@ public final class PreemptionManager {
         if (schedulers.isEmpty()) {
             return null;
         }
-        // Deterministic order: with two Schedulers on one network the same request must always be
-        // handled by the same one.
         schedulers.sort(Comparator.comparing(SchedulerBlockEntity::getBlockPos));
 
         SchedulerLog.debug("Express request detected: {} x{} ({} operations, {} steps, {} bytes)",
                 plan.finalOutput().what().getId(), plan.finalOutput().amount(), complexity.operations(),
                 complexity.steps(), complexity.bytes());
 
-        // The player may have pinned the request to one specific CPU in the terminal. Respect that:
-        // pausing a different CPU would put the job somewhere they did not ask for.
         var pinned = target instanceof CraftingCPUCluster cluster ? cluster : null;
         boolean playerInitiated = src.player().isPresent();
 
@@ -120,14 +98,6 @@ public final class PreemptionManager {
         return null;
     }
 
-    /**
-     * Whether the confirmation menu may present a busy CPU as a valid destination for this plan.
-     *
-     * <p>
-     * AE2 normally removes every busy CPU from the confirmation menu before the player can press
-     * Start. A Scheduler can make one of those CPUs available atomically, but the menu must only
-     * bypass AE2's filter when the exact same server-side preemption checks would accept it.
-     */
     public static boolean canPreempt(IGrid grid, ICraftingPlan plan, ICraftingCPU target, IActionSource src) {
         if (grid == null || plan == null || target == null || src == null) {
             return false;
@@ -152,7 +122,6 @@ public final class PreemptionManager {
         return false;
     }
 
-    /** The subset of {@link SchedulerBlockEntity#selectVictim} checks that apply to a pinned CPU. */
     private static boolean isViableVictim(SchedulerBlockEntity scheduler, CraftingCPUCluster cluster,
             ICraftingPlan plan, boolean playerInitiated) {
         return scheduler.canPreempt(cluster, plan, playerInitiated);

@@ -31,16 +31,7 @@ import dev.BloodyDreamsWork.ae2_scheduler.registry.ModBlockEntities;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.SchedulerBlockEntity;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.SchedulerVisualState;
 
-/**
- * The Crafting Scheduler block.
- *
- * <p>
- * {@link #STATE} drives the model/texture so the block reads at a glance: offline, active, pausing,
- * paused, running an express job, or in error. It is set from the block entity and synced to clients
- * as an ordinary block state, so no custom networking is needed for the visuals.
- */
 public class SchedulerBlock extends BaseEntityBlock {
-
     public static final MapCodec<SchedulerBlock> CODEC = simpleCodec(SchedulerBlock::new);
 
     public static final EnumProperty<SchedulerVisualState> STATE = EnumProperty.create("state",
@@ -119,9 +110,6 @@ public class SchedulerBlock extends BaseEntityBlock {
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState,
             boolean movedByPiston) {
-        // Only when the block is genuinely gone -- unlike BlockEntity#setRemoved, this is not called on
-        // chunk unload, so a paused job is resumed exactly when it should be and never merely because
-        // the chunk went away.
         if (!state.is(newState.getBlock()) && !level.isClientSide()
                 && level.getBlockEntity(pos) instanceof SchedulerBlockEntity scheduler) {
             scheduler.onBlockDestroyed();
@@ -133,8 +121,6 @@ public class SchedulerBlock extends BaseEntityBlock {
     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock,
             BlockPos neighborPos, boolean movedByPiston) {
         super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
-        // A redstone change can switch the Scheduler off, which must resume everything it holds. That
-        // happens on the next tick in SchedulerBlockEntity#serverTick; nothing to do here but flag it.
         if (!level.isClientSide() && level.getBlockEntity(pos) instanceof SchedulerBlockEntity scheduler) {
             scheduler.markStatusDirty();
         }
@@ -147,7 +133,6 @@ public class SchedulerBlock extends BaseEntityBlock {
 
     @Override
     protected int getAnalogOutputSignal(BlockState state, Level level, BlockPos pos) {
-        // Comparator output: how many jobs this Scheduler currently holds paused.
         if (level.getBlockEntity(pos) instanceof SchedulerBlockEntity scheduler) {
             return Math.min(15, scheduler.getPausedJobCount());
         }

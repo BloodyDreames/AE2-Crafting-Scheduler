@@ -13,20 +13,11 @@ import appeng.crafting.execution.ElapsedTimeTracker;
 import appeng.crafting.execution.ExecutingCraftingJob;
 import appeng.crafting.inv.ListCraftingInventory;
 
-/**
- * Read/write access to the package-private state of an {@link ExecutingCraftingJob}.
- *
- * <p>
- * Nothing here changes AE2 behaviour; these are the exact fields AE2 itself reads in
- * {@code CraftingCpuLogic.insert}, and the parked-job routing has to run the same accounting.
- */
 @Mixin(ExecutingCraftingJob.class)
 public interface ExecutingCraftingJobAccessor {
-
     @Accessor("link")
     CraftingLink acs$link();
 
-    /** The ledger of results this job still expects. This is what prevents duplication. */
     @Accessor("waitingFor")
     ListCraftingInventory acs$waitingFor();
 
@@ -48,10 +39,6 @@ public interface ExecutingCraftingJobAccessor {
     @Accessor("suspended")
     void acs$setSuspended(boolean suspended);
 
-    /**
-     * AE2's own serializer. Reused so a parked job is written in exactly the shape AE2's loader
-     * expects, which is what lets the park be restored through {@code CraftingCpuLogic.readFromNBT}.
-     */
     @Invoker("writeToNBT")
     CompoundTag acs$writeToNBT(HolderLookup.Provider registries);
 }

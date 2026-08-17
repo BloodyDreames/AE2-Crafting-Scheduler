@@ -15,7 +15,6 @@ public final class ModBlocks {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(AE2CraftingScheduler.MODID);
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(AE2CraftingScheduler.MODID);
 
-    /** Matches the feel of AE2's machine blocks without being a visual overhaul of anything. */
     public static final DeferredBlock<SchedulerBlock> CRAFTING_SCHEDULER = BLOCKS.register(
             "crafting_scheduler",
             () -> new SchedulerBlock(BlockBehaviour.Properties.of()

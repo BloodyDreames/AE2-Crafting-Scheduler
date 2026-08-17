@@ -4,6 +4,7 @@
 /repo/
 /.idea/
 /.vscode/
+/.ai/
 *.iml
 *.ipr
 *.iws

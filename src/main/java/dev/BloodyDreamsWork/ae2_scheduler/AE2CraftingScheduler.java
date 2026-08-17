@@ -18,16 +18,6 @@ import dev.BloodyDreamsWork.ae2_scheduler.registry.ModBlockEntities;
 import dev.BloodyDreamsWork.ae2_scheduler.registry.ModBlocks;
 import dev.BloodyDreamsWork.ae2_scheduler.registry.ModMenus;
 
-/**
- * AE2: Crafting Scheduler.
- *
- * <p>
- * Adds a single ME device that can pause a running AE2 crafting job, let a small urgent job use the
- * freed Crafting CPU, and then resume the original job from exactly where it stopped -- no cancel, no
- * recalculation, no lost or duplicated items.
- *
- * @see dev.BloodyDreamsWork.ae2_scheduler.park.ParkableCpu
- */
 @Mod(AE2CraftingScheduler.MODID)
 public class AE2CraftingScheduler {
     public static final String MODID = "ae2_crafting_scheduler";
@@ -53,13 +43,10 @@ public class AE2CraftingScheduler {
 
         modEventBus.addListener(AE2CraftingScheduler::registerCapabilities);
 
-        // Everything the Scheduler does affects world state, so its settings belong to the server.
         modContainer.registerConfig(ModConfig.Type.SERVER, SchedulerConfig.SPEC);
     }
 
     private static void registerCapabilities(RegisterCapabilitiesEvent event) {
-        // This is what makes the block an ME device: AE2 discovers grid node hosts through this
-        // capability when a cable or another machine tries to connect to it.
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST,
                 ModBlockEntities.CRAFTING_SCHEDULER.get(), (blockEntity, context) -> blockEntity);
     }

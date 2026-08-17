@@ -2,14 +2,6 @@ package dev.BloodyDreamsWork.ae2_scheduler;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-/**
- * Server-side configuration.
- *
- * <p>
- * Everything here affects world state, so it lives in the SERVER config: on a dedicated server the
- * values come from the server, and in single player they come from the world's {@code serverconfig}
- * folder.
- */
 public final class SchedulerConfig {
     public static final ModConfigSpec SPEC;
 
@@ -162,10 +154,6 @@ public final class SchedulerConfig {
         return DEBUG_LOGGING.get();
     }
 
-    /**
-     * Config access from a Mixin can run before the config is bound (or on a client that has no server
-     * config loaded), so every read goes through this guard.
-     */
     public static boolean isLoaded() {
         return SPEC.isLoaded();
     }

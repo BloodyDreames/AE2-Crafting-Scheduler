@@ -41,25 +41,8 @@ import dev.BloodyDreamsWork.ae2_scheduler.registry.ModBlocks;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.CpuKey;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.SchedulerBlockEntity;
 
-/**
- * Game tests for the pause/resume pipeline, built on AE2's own test-world framework.
- *
- * <p>
- * Run them with {@code gradlew runGameTestServer}. The thresholds these tests rely on are set in
- * {@code run-gametest/defaultconfigs/ae2_crafting_scheduler-server.toml}, which lowers
- * {@code minimumJobComplexityForPreemption} so a job small enough to finish inside a game test still
- * counts as "big".
- *
- * <p>
- * The recipes used throughout are vanilla: {@code 2 oak planks -> 4 sticks} for the long-running job
- * and {@code 4 oak planks -> 1 crafting table} for the express job. The item cell is stocked with
- * <em>exactly</em> the planks both jobs need, so "the network ends up with every stick, every crafting
- * table and zero planks" is a direct proof that nothing was duplicated and nothing was lost.
- */
 @TestPlotClass
 public final class SchedulerTestPlots {
-
-    /** Grid origin. Every helper resolves the grid through this position, so it must carry a node. */
     private static final BlockPos ORIGIN = BlockPos.ZERO;
 
     private static final BlockPos SCHEDULER_POS = new BlockPos(1, 0, 0);
@@ -71,19 +54,9 @@ public final class SchedulerTestPlots {
     private static final int STICK_TARGET = 400;
     private static final int PLANKS_FOR_STICKS = STICK_TARGET / 4 * 2;
 
-    /**
-     * The express job is eight crafting tables rather than one: eight operations still counts as an
-     * express craft, but it keeps the CPU busy long enough for the tests to observe the paused state
-     * across several ticks instead of a single one.
-     */
     private static final int EXPRESS_TABLES = 8;
     private static final int PLANKS_FOR_TABLE = EXPRESS_TABLES * 4;
 
-    /**
-     * Produces a plan just below the 1K CPU limit (the exact value is asserted by the test). This is
-     * deliberately much tighter than the regular 64K tests and reproduces a player filling their
-     * only 1024-byte processor before asking for a tiny craft.
-     */
     private static final int ONE_K_STICK_TARGET = 560;
     private static final int ONE_K_PLANKS_FOR_STICKS = ONE_K_STICK_TARGET / 4 * 2;
     private static final long ONE_K_BYTES = 1024;
@@ -91,14 +64,6 @@ public final class SchedulerTestPlots {
     private SchedulerTestPlots() {
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Shared setup
-    // ------------------------------------------------------------------------------------------
-
-    /**
-     * A minimal but complete autocrafting network: controller, one or two single-block Crafting CPUs, a
-     * pattern provider with molecular assemblers, a drive, and the Scheduler.
-     */
     private static void baseNetwork(PlotBuilder plot, boolean secondCpu, int extraPlanks) {
         baseNetwork(plot, secondCpu, extraPlanks, AEBlocks.CRAFTING_STORAGE_64K,
                 PLANKS_FOR_STICKS + PLANKS_FOR_TABLE);
@@ -106,8 +71,6 @@ public final class SchedulerTestPlots {
 
     private static void baseNetwork(PlotBuilder plot, boolean secondCpu, int extraPlanks,
             BlockDefinition<?> cpuStorage, int basePlanks) {
-        // Layout follows AE2's own autocrafting test plots: one cable run along -Z with every machine
-        // hanging off its side, so each device has an unambiguous adjacent cable to connect to.
         plot.creativeEnergyCell("0 -1 -1");
         plot.cable("0 0 [-4,0]");
         plot.block("0 1 0", AEBlocks.CONTROLLER);
@@ -122,13 +85,11 @@ public final class SchedulerTestPlots {
         plot.blockEntity("1 0 -2", AEBlocks.PATTERN_PROVIDER, provider -> {
             var level = (ServerLevel) provider.getLevel();
             var inv = provider.getLogic().getPatternInv();
-            // 2 oak planks (stacked vertically) -> 4 sticks
             inv.addItems(CraftingPatternHelper.encodeCraftingPattern(level, new Object[] {
                     Items.OAK_PLANKS, null, null,
                     Items.OAK_PLANKS, null, null,
                     null, null, null
             }, false, false));
-            // 4 oak planks -> 1 crafting table
             inv.addItems(CraftingPatternHelper.encodeCraftingPattern(level, new Object[] {
                     Items.OAK_PLANKS, Items.OAK_PLANKS, null,
                     Items.OAK_PLANKS, Items.OAK_PLANKS, null,
@@ -140,14 +101,8 @@ public final class SchedulerTestPlots {
 
         var drive = plot.drive(DRIVE_POS);
         drive.addItemCell64k().add(Items.OAK_PLANKS, basePlanks + extraPlanks);
-
     }
 
-    /**
-     * Opts every CPU on the network in, the way a player would tick them in the GUI. CPUs are keyed by
-     * their world position, so this has to run against the built plot rather than with the plot's own
-     * relative coordinates.
-     */
     private static void manageAllCpus(PlotTestHelper helper) {
         var grid = helper.getGrid(ORIGIN);
         for (var scheduler : grid.getMachines(SchedulerBlockEntity.class)) {
@@ -159,10 +114,6 @@ public final class SchedulerTestPlots {
             }
         }
     }
-
-    // ------------------------------------------------------------------------------------------
-    // 1K boundary: a nearly full, busy 1024-byte CPU still accepts a small express job.
-    // ------------------------------------------------------------------------------------------
 
     @TestPlot("scheduler_busy_1k_cpu_preempts")
     public static void busyOneKCpuPreempts(PlotBuilder plot) {
@@ -224,16 +175,10 @@ public final class SchedulerTestPlots {
         }).maxTicks(1600).setupTicks(80);
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Confirmation-menu regression: a managed busy CPU must not disappear after the plan arrives.
-    // ------------------------------------------------------------------------------------------
-
     @TestPlot("scheduler_confirm_menu_keeps_busy_cpu")
     public static void confirmMenuKeepsBusyCpu(PlotBuilder plot) {
         var expectedPlanks = ONE_K_PLANKS_FOR_STICKS + PLANKS_FOR_TABLE;
         baseNetwork(plot, false, 0, AEBlocks.CRAFTING_STORAGE_1K, expectedPlanks);
-        // CraftConfirmMenu requires a real AE2 submenu host on the same grid. An empty ME Chest is a
-        // convenient terminal host and does not participate in storage or crafting.
         plot.block(MENU_HOST_POS, AEBlocks.ME_CHEST);
 
         plot.test(helper -> {
@@ -261,9 +206,6 @@ public final class SchedulerTestPlots {
                                 new BaseActionSource(), plan));
                         setPrivateField(menu, "result", plan);
 
-                        // A nearly full 1K job can have far fewer operations than the automatic
-                        // anti-thrashing threshold. Explicit Start is a manual scheduling decision and
-                        // must remain possible even in that case.
                         requirePark(helper).acs$setActiveComplexity(1);
 
                         helper.check(invokeCpuMatches(menu, cluster),
@@ -273,10 +215,6 @@ public final class SchedulerTestPlots {
                     .thenSucceed();
         }).maxTicks(600).setupTicks(80);
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Reservation: nobody may steal the CPU between express completion and background restore.
-    // ------------------------------------------------------------------------------------------
 
     @TestPlot("scheduler_park_reserves_cpu")
     public static void parkReservesCpu(PlotBuilder plot) {
@@ -294,8 +232,6 @@ public final class SchedulerTestPlots {
                 helper.check(park.acs$isParked(), "the background job was not parked");
                 helper.check(park.acs$hasActiveJob(), "the express job never entered the active slot");
 
-                // Create the exact former race window: the express slot is empty, while the Scheduler
-                // has not ticked yet to restore the background job.
                 cluster.cancelJob();
                 helper.check(!park.acs$hasActiveJob(), "cancelling express did not empty the active slot");
                 helper.check(cluster.isBusy(),
@@ -330,10 +266,6 @@ public final class SchedulerTestPlots {
         }).maxTicks(1400).setupTicks(80);
     }
 
-    // ------------------------------------------------------------------------------------------
-    // 1. Basic: pause a big job, run a small one, resume, and account for every item.
-    // ------------------------------------------------------------------------------------------
-
     @TestPlot("scheduler_pause_resume")
     public static void pauseResume(PlotBuilder plot) {
         baseNetwork(plot, false, 0);
@@ -346,8 +278,6 @@ public final class SchedulerTestPlots {
                     .thenExecute(() -> assertNetworkIsSane(helper, PLANKS_FOR_STICKS + PLANKS_FOR_TABLE))
                     .thenWaitUntil(() -> bigJob.poll(helper))
                     .thenExecute(() -> bigJob.require(helper, "the background job"))
-                    // Let the job actually get going so there is real state to preserve: pushed
-                    // patterns, intermediate items, and results still in flight from the assemblers.
                     .thenIdle(20)
                     .thenExecute(() -> {
                         var park = requirePark(helper);
@@ -356,16 +286,12 @@ public final class SchedulerTestPlots {
                                 "the running job's complexity was not recorded");
                         helper.check(activeProgress(helper) > 0, "the big job made no progress");
                     })
-                    // The pause and the express submit both happen inside the submit call, so the flag
-                    // captured there is the authoritative answer to "was the big job paused for it?".
                     .thenWaitUntil(() -> expressJob.poll(helper))
                     .thenExecute(() -> {
                         expressJob.require(helper, "the express job");
                         helper.check(expressJob.parkedOnSubmit(),
                                 "the big job was not paused for the express job");
                     })
-                    // Everything from here on is the real acceptance criterion: both jobs finish, and
-                    // the item count in the world adds up exactly.
                     .thenWaitUntil(() -> {
                         helper.assertNetworkContains(ORIGIN, Items.CRAFTING_TABLE);
                         helper.assertNetworkContains(ORIGIN, Items.STICK);
@@ -378,7 +304,6 @@ public final class SchedulerTestPlots {
                     .thenExecute(() -> {
                         var park = requirePark(helper);
                         helper.check(!park.acs$isParked(), "a job is still stuck in the park slot");
-                        // Every plank that went in came back out as a stick or a crafting table.
                         helper.assertNetworkContainsNot(ORIGIN, Items.OAK_PLANKS);
                         var storage = helper.getGrid(ORIGIN).getStorageService().getInventory();
                         var tables = storage.extract(AEItemKey.of(Items.CRAFTING_TABLE), Long.MAX_VALUE,
@@ -390,22 +315,12 @@ public final class SchedulerTestPlots {
         }).maxTicks(1200).setupTicks(80);
     }
 
-    // ------------------------------------------------------------------------------------------
-    // 2. A paused job survives being written to and read back from NBT.
-    // ------------------------------------------------------------------------------------------
-
-    /**
-     * This is the server-restart path. A game test cannot restart the server, but it can exercise the
-     * exact code that a restart runs: the CPU's own {@code writeToNBT} / {@code readFromNBT}, which is
-     * where the park state lives.
-     */
     @TestPlot("scheduler_park_survives_nbt")
     public static void parkSurvivesNbt(PlotBuilder plot) {
         baseNetwork(plot, false, 0);
 
         plot.test(helper -> {
             var bigJob = new CraftRequest(AEItemKey.of(Items.STICK), STICK_TARGET);
-            // The round trip happens on the submit tick itself, while the job is definitely parked.
             var expressJob = new CraftRequest(AEItemKey.of(Items.CRAFTING_TABLE), EXPRESS_TABLES)
                     .onSubmitted(() -> roundTripThroughNbt(helper));
 
@@ -416,7 +331,6 @@ public final class SchedulerTestPlots {
                     .thenIdle(20)
                     .thenWaitUntil(() -> expressJob.poll(helper))
                     .thenExecute(() -> expressJob.require(helper, "the express job"))
-                    // And it still resumes and completes correctly afterwards.
                     .thenWaitUntil(() -> {
                         var storage = helper.getGrid(ORIGIN).getStorageService().getInventory();
                         var sticks = storage.extract(AEItemKey.of(Items.STICK), Long.MAX_VALUE,
@@ -428,17 +342,12 @@ public final class SchedulerTestPlots {
         }).maxTicks(1200).setupTicks(80);
     }
 
-    // ------------------------------------------------------------------------------------------
-    // 3. Removing the Scheduler must resume, not strand, what it was holding.
-    // ------------------------------------------------------------------------------------------
-
     @TestPlot("scheduler_removal_resumes_job")
     public static void removalResumesJob(PlotBuilder plot) {
         baseNetwork(plot, false, 0);
 
         plot.test(helper -> {
             var bigJob = new CraftRequest(AEItemKey.of(Items.STICK), STICK_TARGET);
-            // Break the Scheduler on the submit tick, while it is definitely holding the big job.
             var expressJob = new CraftRequest(AEItemKey.of(Items.CRAFTING_TABLE), EXPRESS_TABLES)
                     .onSubmitted(() -> {
                         helper.check(requirePark(helper).acs$isParked(), "the big job was not paused");
@@ -466,17 +375,11 @@ public final class SchedulerTestPlots {
         }).maxTicks(1200).setupTicks(80);
     }
 
-    // ------------------------------------------------------------------------------------------
-    // 4. With several busy CPUs, the Scheduler must pick one deterministically and pause only it.
-    // ------------------------------------------------------------------------------------------
-
     @TestPlot("scheduler_picks_one_cpu")
     public static void picksOneCpu(PlotBuilder plot) {
-        // The two background jobs add up to STICK_TARGET, so the stock planks are exactly right.
         baseNetwork(plot, true, 0);
 
         plot.test(helper -> {
-            // Two background jobs, one per CPU, so nothing is free when the express request arrives.
             var firstJob = new CraftRequest(AEItemKey.of(Items.STICK), STICK_TARGET / 2);
             var secondJob = new CraftRequest(AEItemKey.of(Items.STICK), STICK_TARGET / 2);
             var expressJob = new CraftRequest(AEItemKey.of(Items.CRAFTING_TABLE), EXPRESS_TABLES)
@@ -519,11 +422,6 @@ public final class SchedulerTestPlots {
         }).maxTicks(1600).setupTicks(80);
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------------------------------
-
-    /** Tells apart "block missing", "not a grid host", "node not created" and "not connected". */
     private static String describeHost(PlotTestHelper helper, BlockPos relative) {
         var level = helper.getLevel();
         var pos = helper.absolutePos(relative);
@@ -540,10 +438,6 @@ public final class SchedulerTestPlots {
                 + ", grid=" + System.identityHashCode(node.getGrid()) + ")";
     }
 
-    /**
-     * Writes the CPU out and reads it straight back, which is exactly what a server restart does to a
-     * paused job, and checks that nothing about the park changed.
-     */
     private static void roundTripThroughNbt(PlotTestHelper helper) {
         var cluster = requireCluster(helper);
         var park = requirePark(helper);
@@ -574,7 +468,6 @@ public final class SchedulerTestPlots {
                 "the paused job lost its recorded size across save/load");
     }
 
-    /** Calls AE2's actual private CPU predicate, including our mixin, rather than a copied test rule. */
     private static boolean invokeCpuMatches(CraftConfirmMenu menu,
             appeng.api.networking.crafting.ICraftingCPU cpu) {
         try {
@@ -598,10 +491,6 @@ public final class SchedulerTestPlots {
         }
     }
 
-    /**
-     * Fails loudly and specifically if the plot did not come up the way the tests assume. Without this
-     * every downstream failure just says "job rejected", which says nothing about why.
-     */
     private static void assertNetworkIsSane(PlotTestHelper helper, int expectedPlanks) {
         var grid = helper.getGrid(ORIGIN);
 
@@ -640,7 +529,6 @@ public final class SchedulerTestPlots {
         long planks = storage.extract(AEItemKey.of(Items.OAK_PLANKS), Long.MAX_VALUE,
                 appeng.api.config.Actionable.SIMULATE, new BaseActionSource());
         if (planks != expectedPlanks) {
-            // Usually means the drive did not get a channel, so say so instead of just the count.
             var contents = new appeng.api.stacks.KeyCounter();
             storage.getAvailableStacks(contents);
             var owners = new StringBuilder();
@@ -677,18 +565,6 @@ public final class SchedulerTestPlots {
                         + "; cable next to it: " + describeHost(helper, new BlockPos(0, 0, 0)));
     }
 
-    /**
-     * A crafting request driven one tick at a time.
-     *
-     * <p>
-     * The plan is computed on AE2's calculation thread, which needs the server thread to keep ticking,
-     * so it must never be waited on synchronously. {@link #poll} is written for
-     * {@code GameTestSequence#thenWaitUntil}: it throws to be retried until the plan is ready, and on
-     * the tick it finally submits it records both the result <em>and</em> whether the CPU was holding a
-     * paused job at that exact moment. That capture is what makes the pause assertion deterministic:
-     * the preemption happens inside the submit call, and a one-operation express job can be finished
-     * again before the next tick runs.
-     */
     private static final class CraftRequest {
         private final AEKey what;
         private final long amount;
@@ -708,11 +584,6 @@ public final class SchedulerTestPlots {
             this.amount = amount;
         }
 
-        /**
-         * Runs on the very tick the job is submitted, right after the submit returns. Tests that need
-         * to observe or disturb the paused state use this rather than a following step, because a
-         * short express job can be finished again before the next tick.
-         */
         CraftRequest onSubmitted(Runnable action) {
             this.onSubmitted = action;
             return this;
@@ -740,9 +611,6 @@ public final class SchedulerTestPlots {
             var grid = helper.getGrid(ORIGIN);
 
             if (future == null) {
-                // Same source AE2's own TestCraftingJob uses for planning: a machine source anchored on
-                // the grid pivot. A plain BaseActionSource has no identity and the simulated extraction
-                // finds nothing, which shows up as "the requested item itself is missing".
                 var planningSource = new MachineSource(grid::getPivot);
                 ICraftingSimulationRequester simRequester = () -> planningSource;
                 future = grid.getCraftingService().beginCraftingCalculation(
@@ -752,7 +620,6 @@ public final class SchedulerTestPlots {
             try {
                 plan = future.get(0, TimeUnit.MILLISECONDS);
             } catch (TimeoutException e) {
-                // Not ready yet; thenWaitUntil will call us again next tick.
                 throw new GameTestAssertException("crafting calculation for " + what + " is still running");
             } catch (InterruptedException | ExecutionException e) {
                 throw new GameTestAssertException("crafting calculation for " + what + " failed: " + e);
@@ -763,8 +630,6 @@ public final class SchedulerTestPlots {
                     missing.append(entry.getKey().getId()).append(" x").append(entry.getLongValue())
                             .append("; ");
                 }
-                // Throw the plan away and recompute next tick: early in a plot's life the network can
-                // still be settling, and a plan computed then would be cached forever.
                 plan = null;
                 future = null;
                 throw new GameTestAssertException(

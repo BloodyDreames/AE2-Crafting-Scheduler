@@ -40,32 +40,8 @@ import dev.BloodyDreamsWork.ae2_scheduler.SchedulerLog;
 import dev.BloodyDreamsWork.ae2_scheduler.park.ParkableCpu;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.PlanComplexity;
 
-/**
- * Adds a second, inactive job slot ("the park slot") to AE2's crafting CPU.
- *
- * <p>
- * AE2 defines "CPU is busy" as {@code job != null}. Everything else needed for a pause -- the
- * remaining pattern pushes, the intermediate items, the expectation ledger, the crafting link, the
- * progress tracker -- is already CPU-local and already round-trips through NBT on every server
- * restart. The only operation AE2 lacks is moving a job out of the active slot <em>without</em>
- * cancelling it, which is what this mixin provides.
- *
- * <p>
- * A parked job:
- * <ul>
- * <li>is never scheduled, because {@code tickCraftingLogic} only ever looks at {@code job};</li>
- * <li>still settles work that was dispatched to machines before the pause, because {@link #insert} is
- * extended to run AE2's own accounting against the parked job;</li>
- * <li>keeps its items out of the network in a separate inventory, so nothing else can consume the
- * intermediates the job will need when it resumes;</li>
- * <li>is saved and loaded with the CPU, so it survives {@code /stop}, a crash, and chunk unload.</li>
- * </ul>
- *
- * @see dev.BloodyDreamsWork.ae2_scheduler.park.ParkableCpu
- */
 @Mixin(CraftingCpuLogic.class)
 public abstract class CraftingCpuLogicMixin implements ParkableCpu {
-
     @Unique
     private static final String NBT_PARK = "acs_park";
     @Unique
@@ -101,20 +77,10 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
     @Shadow
     public abstract void readFromNBT(CompoundTag data, HolderLookup.Provider registries);
 
-    /** The paused job. Non-null exactly when this CPU holds a park. */
     @Unique
     @Nullable
     private ExecutingCraftingJob acs$parkedJob;
 
-    /**
-     * Intermediate items belonging to the paused job. Deliberately kept out of both the active
-     * inventory and the ME network: an express job running on this CPU must not be able to consume
-     * them, or the paused job would resume into a state its remaining tasks cannot satisfy.
-     *
-     * <p>
-     * May outlive {@link #acs$parkedJob} for a few ticks while leftovers are handed back to the
-     * network after a park is finished or abandoned.
-     */
     @Unique
     @Nullable
     private ListCraftingInventory acs$parkedInventory;
@@ -135,21 +101,14 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
     @Unique
     private long acs$ticksSinceHeartbeat;
 
-    /** Guards the nested {@code readFromNBT} calls used to rehydrate a saved park. */
     @Unique
     private boolean acs$rehydrating;
 
-    /** True only around the Scheduler's atomic submit into a reserved active slot. */
     @Unique
     private boolean acs$expressSubmitPermit;
 
-    /** Amounts {@code insert} was called with, innermost last. See {@link #acs$captureInsertAmount}. */
     @Unique
     private final LongArrayList acs$offeredAmounts = new LongArrayList(4);
-
-    // ------------------------------------------------------------------------------------------
-    // ParkableCpu
-    // ------------------------------------------------------------------------------------------
 
     @Override
     public boolean acs$isParked() {
@@ -161,8 +120,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         if (job == null || acs$parkedJob != null) {
             return false;
         }
-        // A previous park may still be handing leftovers back to the network. Parking now would
-        // replace that inventory and lose those items, so wait a tick.
         if (acs$parkedInventory != null && !acs$parkedInventory.list.isEmpty()) {
             return false;
         }
@@ -174,7 +131,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         acs$ticksSinceHeartbeat = 0;
         acs$activeComplexity = 0;
 
-        // The crafting monitor should stop advertising the paused job; whatever runs next will set it.
         cluster.updateOutput(null);
         cluster.markDirty();
         return true;
@@ -318,14 +274,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         return acs$activeComplexity;
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Internals
-    // ------------------------------------------------------------------------------------------
-
-    /**
-     * Moves {@code job} and the contents of {@code inventory} into the park slot. The job object is
-     * carried over untouched -- no serialization round-trip, no recalculation, no link change.
-     */
     @Unique
     private void acs$moveActiveToPark() {
         var parked = new ListCraftingInventory(this::acs$onParkedInventoryChange);
@@ -341,16 +289,9 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
 
     @Unique
     private void acs$onParkedInventoryChange(AEKey what) {
-        // Reuse AE2's change bookkeeping so the network's "currently crafting" cache and any open
-        // menus stay in sync with the paused job.
         postChange(what);
     }
 
-    /**
-     * The parked-job half of {@code CraftingCpuLogic.insert}. Runs the exact same accounting AE2 runs
-     * for an active job, because a result that was dispatched before the pause is owed to the paused
-     * job and to nothing else.
-     */
     @Unique
     private long acs$insertIntoParkedJob(AEKey what, long amount, Actionable type) {
         var parked = acs$parkedJob;
@@ -360,7 +301,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         var accessor = (ExecutingCraftingJobAccessor) parked;
         var waitingFor = accessor.acs$waitingFor();
 
-        // Never accept more than was expected. This is the invariant that makes duplication impossible.
         long expected = waitingFor.extract(what, amount, Actionable.SIMULATE);
         if (expected <= 0) {
             return 0;
@@ -379,7 +319,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         var finalOutput = accessor.acs$finalOutput();
 
         if (finalOutput != null && what.matches(finalOutput)) {
-            // Final outputs go straight to whoever requested the job, exactly as for a running job.
             inserted = accessor.acs$link().insert(what, amount, type);
 
             if (type == Actionable.MODULATE) {
@@ -407,10 +346,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         return inserted;
     }
 
-    /**
-     * Mirrors {@code CraftingCpuLogic.finishJob} for the park slot. Leftover intermediates are handed
-     * back to the network by {@link #acs$drainOrphanedParkedInventory}.
-     */
     @Unique
     private void acs$finishParkedJob(boolean success) {
         var parked = acs$parkedJob;
@@ -434,10 +369,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         cluster.markDirty();
     }
 
-    /**
-     * Returns items of a park that no longer has a job to the ME network. Runs a little at a time so a
-     * full network cannot lose anything: whatever does not fit stays held until it does.
-     */
     @Unique
     private void acs$drainOrphanedParkedInventory() {
         if (acs$parkedJob != null || acs$parkedInventory == null) {
@@ -464,20 +395,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         cluster.markDirty();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // AE2 hooks
-    // ------------------------------------------------------------------------------------------
-
-    /**
-     * Remembers the amount {@code insert} was called with.
-     *
-     * <p>
-     * AE2 reassigns its own {@code amount} parameter when the active job wants less than was offered,
-     * so by the time the RETURN hook runs the parameter no longer says how much the caller actually
-     * had. Without this, an item both the active and the paused job are waiting for would be
-     * under-reported to the paused job, and the paused job would wait for a result that already went
-     * into a disk. A stack, because a final output can re-enter this method through the requester.
-     */
     @Inject(method = "insert", at = @At("HEAD"))
     private void acs$captureInsertAmount(AEKey what, long amount, Actionable type,
             CallbackInfoReturnable<Long> cir) {
@@ -486,10 +403,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         }
     }
 
-    /**
-     * Routes results the active job did not want to the paused job. This is what lets a furnace that
-     * was loaded before the pause deliver into the job that dispatched it.
-     */
     @Inject(method = "insert", at = @At("RETURN"), cancellable = true)
     private void acs$insertIntoPark(AEKey what, long amount, Actionable type,
             CallbackInfoReturnable<Long> cir) {
@@ -511,11 +424,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         }
     }
 
-    /**
-     * Records how big the job that was just accepted is, so the Scheduler can later tell a huge
-     * background job apart from a nearly finished one. AE2 discards the plan right after submitting, so
-     * this is the only moment the information exists.
-     */
     @Inject(method = "trySubmitJob", at = @At("RETURN"))
     private void acs$recordJobComplexity(IGrid grid, ICraftingPlan plan, IActionSource src,
             ICraftingRequester requester, CallbackInfoReturnable<ICraftingSubmitResult> cir) {
@@ -525,7 +433,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         }
     }
 
-    /** A parked job owns this CPU until it is restored; only {@link #acs$submitExpress} may reuse it. */
     @Inject(method = "trySubmitJob", at = @At("HEAD"), cancellable = true)
     private void acs$rejectSubmitIntoReservedCpu(IGrid grid, ICraftingPlan plan, IActionSource src,
             ICraftingRequester requester, CallbackInfoReturnable<ICraftingSubmitResult> cir) {
@@ -534,14 +441,8 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         }
     }
 
-    /**
-     * Park housekeeping. Deliberately at HEAD and before AE2's own active check is irrelevant here --
-     * an inactive CPU simply does not advance any of these counters.
-     */
     @Inject(method = "tickCraftingLogic", at = @At("HEAD"))
     private void acs$tickPark(IEnergyService energyService, CraftingService craftingService, CallbackInfo ci) {
-        // The capture stack is always balanced within a tick; clear it defensively so an exception
-        // thrown out of a requester somewhere else can never make it grow without bound.
         if (!acs$offeredAmounts.isEmpty()) {
             acs$offeredAmounts.clear();
         }
@@ -554,8 +455,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
             acs$parkedDuration++;
             acs$ticksSinceHeartbeat++;
 
-            // Somebody cancelled the paused job from the outside (requester removed, nexus timed out).
-            // Finish it the way AE2 would and give the items back; never leave it hanging.
             if (((ExecutingCraftingJobAccessor) acs$parkedJob).acs$link().isCanceled()) {
                 SchedulerLog.debug("Paused job's crafting link was cancelled; releasing park");
                 acs$finishParkedJob(false);
@@ -567,16 +466,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         acs$drainOrphanedParkedInventory();
     }
 
-    /**
-     * The last line of defence against a CPU being lost forever.
-     *
-     * <p>
-     * A park is only ever held on behalf of a Scheduler that keeps checking in. If that Scheduler is
-     * broken, unpowered, redstone-disabled or cut off by a network split, this CPU resumes the paused
-     * job by itself. If an express job is somehow still occupying the slot long after the owner
-     * vanished, it is cancelled first -- its items go back to the network exactly as they would for any
-     * cancelled AE2 job.
-     */
     @Unique
     private void acs$watchdog() {
         if (!SchedulerConfig.isLoaded()) {
@@ -627,16 +516,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         data.put(NBT_PARK, park);
     }
 
-    /**
-     * Rehydrates a saved park.
-     *
-     * <p>
-     * AE2's {@code ExecutingCraftingJob} NBT constructor is package-private and does non-trivial work
-     * (decoding patterns, re-registering the crafting link with the crafting service). Rather than
-     * duplicate it, the saved park is fed through AE2's own {@code readFromNBT} into the active slot
-     * and then moved across. If an express job was also saved it is stashed and put back around that,
-     * so a restart in the middle of an express craft restores both jobs.
-     */
     @Inject(method = "readFromNBT", at = @At("TAIL"))
     private void acs$readPark(CompoundTag data, HolderLookup.Provider registries, CallbackInfo ci) {
         if (acs$rehydrating) {
@@ -658,15 +537,12 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
 
         acs$rehydrating = true;
         try {
-            // Whatever AE2 just restored into the active slot (an express job, if one was running).
             var activeState = new CompoundTag();
             writeToNBT(activeState, registries);
 
-            // Let AE2 deserialize the paused job, then move it out of the way.
             readFromNBT(park.getCompound(NBT_PARK_STATE), registries);
             acs$moveActiveToPark();
 
-            // Put the express job back where it was.
             readFromNBT(activeState, registries);
         } catch (RuntimeException e) {
             SchedulerLog.error("Failed to restore a paused crafting job; its items are kept held", e);
@@ -689,10 +565,6 @@ public abstract class CraftingCpuLogicMixin implements ParkableCpu {
         }
     }
 
-    /**
-     * The network's "is this being crafted" cache must include paused jobs, otherwise Pattern Providers
-     * configured to only craft what is requested would stop recognising the job while it is paused.
-     */
     @Inject(method = "getAllWaitingFor", at = @At("TAIL"))
     private void acs$parkedWaitingFor(Set<AEKey> waitingFor, CallbackInfo ci) {
         if (acs$parkedJob != null) {

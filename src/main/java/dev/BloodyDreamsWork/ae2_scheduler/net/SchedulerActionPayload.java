@@ -8,19 +8,12 @@ import net.minecraft.resources.ResourceLocation;
 
 import dev.BloodyDreamsWork.ae2_scheduler.AE2CraftingScheduler;
 
-/**
- * Client to server: one GUI action. Every action is validated against the open menu on arrival, so a
- * crafted packet can only ever affect a Scheduler the player actually has open.
- */
 public record SchedulerActionPayload(Action action, BlockPos cpu) implements CustomPacketPayload {
-
     public enum Action {
-        /** Add or remove a CPU from this Scheduler's managed set. */
         TOGGLE_CPU,
-        /** Cycle Ignore Redstone / Active With Signal / Active Without Signal. */
         CYCLE_REDSTONE,
-        /** Cancel the express job on a CPU and resume the original one immediately. */
-        CANCEL_EXPRESS
+        CANCEL_EXPRESS,
+        CYCLE_REDSTONE_BACKWARDS
     }
 
     public static final Type<SchedulerActionPayload> TYPE = new Type<>(

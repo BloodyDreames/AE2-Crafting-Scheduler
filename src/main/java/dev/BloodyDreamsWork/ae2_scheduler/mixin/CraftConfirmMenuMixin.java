@@ -17,24 +17,8 @@ import appeng.menu.me.crafting.CraftConfirmMenu;
 
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.PreemptionManager;
 
-/**
- * Bridges AE2's crafting confirmation screen to the Scheduler's preemption path.
- *
- * <p>
- * AE2's normal CPU predicate is {@code capacity >= plan bytes && !cpu.isBusy()}. During the first
- * menu update the plan has not been installed yet, so a busy CPU is briefly visible; one update later
- * the predicate removes it and disables Start. The submit hook in {@code CraftingServiceMixin} can
- * therefore never run through the normal player workflow.
- *
- * <p>
- * Preserve AE2's answer whenever it already accepts the CPU. When it rejects a busy CPU, add it back
- * only if an operational Scheduler has positively checked that this exact plan and CPU can be
- * preempted. The actual submit path repeats every check, so a state change between rendering and the
- * click remains safe.
- */
 @Mixin(CraftConfirmMenu.class)
 public abstract class CraftConfirmMenuMixin {
-
     @Shadow
     private ICraftingPlan result;
 
@@ -65,7 +49,6 @@ public abstract class CraftConfirmMenuMixin {
         }
     }
 
-    /** Reuses AE2's existing synchronized CPU label to explain why a busy CPU is selectable. */
     @Inject(method = "broadcastChanges", at = @At("TAIL"))
     private void acs$describeAutomaticPreemption(CallbackInfo ci) {
         if (result == null) {
@@ -76,7 +59,6 @@ public abstract class CraftConfirmMenuMixin {
             return;
         }
         if (selectedCpu != null) {
-            // onCPUSelectionChanged has already installed the selected CPU's real name.
             acs$showingPreemptionHint = false;
             return;
         }

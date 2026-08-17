@@ -10,13 +10,12 @@ import dev.BloodyDreamsWork.ae2_scheduler.menu.SchedulerMenu;
 
 @EventBusSubscriber(modid = AE2CraftingScheduler.MODID)
 public final class ModNetwork {
-
     private ModNetwork() {
     }
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("1");
+        var registrar = event.registrar("2");
 
         registrar.playToClient(SchedulerStatusPayload.TYPE, SchedulerStatusPayload.STREAM_CODEC,
                 ModNetwork::handleStatus);
@@ -31,8 +30,6 @@ public final class ModNetwork {
     }
 
     private static void handleAction(SchedulerActionPayload payload, IPayloadContext context) {
-        // The action is applied to the menu the player actually has open, never to an arbitrary
-        // position from the packet.
         if (context.player().containerMenu instanceof SchedulerMenu menu) {
             menu.handleAction(payload);
         }

@@ -12,13 +12,13 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import appeng.api.networking.crafting.ICraftingCPU;
 import appeng.api.stacks.GenericStack;
 import appeng.me.cluster.implementations.CraftingCPUCluster;
+import appeng.menu.AEBaseMenu;
 
 import dev.BloodyDreamsWork.ae2_scheduler.SchedulerConfig;
 import dev.BloodyDreamsWork.ae2_scheduler.net.SchedulerActionPayload;
@@ -29,42 +29,28 @@ import dev.BloodyDreamsWork.ae2_scheduler.scheduler.ManagedCpuState;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.SchedulerBlockEntity;
 import dev.BloodyDreamsWork.ae2_scheduler.scheduler.SchedulerRedstoneMode;
 
-/**
- * Menu for the Crafting Scheduler.
- *
- * <p>
- * It holds no slots -- the Scheduler is a status board and a set of switches. The server pushes a
- * complete {@link SchedulerStatusPayload} whenever something changes and at most a few times a second
- * otherwise, and the client renders whatever it last received.
- */
-public class SchedulerMenu extends AbstractContainerMenu {
-
+public class SchedulerMenu extends AEBaseMenu {
     private static final int REFRESH_INTERVAL_TICKS = 5;
     private static final SchedulerStatusPayload EMPTY = new SchedulerStatusPayload(false, false, 0, 0,
             SchedulerRedstoneMode.IGNORE, List.of());
 
     @Nullable
     private final SchedulerBlockEntity host;
-    private final Player player;
     private final BlockPos hostPos;
 
     private SchedulerStatusPayload status = EMPTY;
     private int ticksUntilRefresh;
 
-    /** Server-side constructor. */
     public SchedulerMenu(int containerId, Inventory playerInventory, SchedulerBlockEntity host) {
-        super(ModMenus.CRAFTING_SCHEDULER.get(), containerId);
+        super(ModMenus.CRAFTING_SCHEDULER.get(), containerId, playerInventory, host);
         this.host = host;
-        this.player = playerInventory.player;
         this.hostPos = host.getBlockPos();
         host.markStatusDirty();
     }
 
-    /** Client-side constructor. */
     public SchedulerMenu(int containerId, Inventory playerInventory, RegistryFriendlyByteBuf buf) {
-        super(ModMenus.CRAFTING_SCHEDULER.get(), containerId);
+        super(ModMenus.CRAFTING_SCHEDULER.get(), containerId, playerInventory, null);
         this.host = null;
-        this.player = playerInventory.player;
         this.hostPos = buf.readBlockPos();
     }
 
@@ -87,6 +73,9 @@ public class SchedulerMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player player) {
+        if (!super.stillValid(player)) {
+            return false;
+        }
         if (host == null) {
             return true;
         }
@@ -97,7 +86,7 @@ public class SchedulerMenu extends AbstractContainerMenu {
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
-        if (host == null || !(player instanceof ServerPlayer serverPlayer)) {
+        if (host == null || !(getPlayer() instanceof ServerPlayer serverPlayer)) {
             return;
         }
         boolean dirty = host.consumeStatusDirty();
@@ -108,11 +97,6 @@ public class SchedulerMenu extends AbstractContainerMenu {
         PacketDistributor.sendToPlayer(serverPlayer, buildStatus(host));
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Actions
-    // ------------------------------------------------------------------------------------------
-
-    /** Handles an action packet. Runs on the server, with {@code host} guaranteed non-null. */
     public void handleAction(SchedulerActionPayload payload) {
         if (host == null || host.isRemoved()) {
             return;
@@ -120,14 +104,11 @@ public class SchedulerMenu extends AbstractContainerMenu {
         switch (payload.action()) {
             case TOGGLE_CPU -> host.setManaged(payload.cpu(), !host.manages(payload.cpu()));
             case CYCLE_REDSTONE -> host.setRedstoneMode(host.getRedstoneMode().next());
+            case CYCLE_REDSTONE_BACKWARDS -> host.setRedstoneMode(host.getRedstoneMode().previous());
             case CANCEL_EXPRESS -> host.cancelExpress(payload.cpu());
         }
         host.markStatusDirty();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Status assembly
-    // ------------------------------------------------------------------------------------------
 
     private static SchedulerStatusPayload buildStatus(SchedulerBlockEntity host) {
         var grid = host.getGrid();
@@ -142,15 +123,11 @@ public class SchedulerMenu extends AbstractContainerMenu {
                     seen.add(key);
                     rows.add(describe(host, cluster, key));
                 } else {
-                    // A Crafting CPU from another addon that is not built on AE2's cluster. It is listed
-                    // so the player can see it exists, and never touched.
                     rows.add(unsupported(cpu, foreignIndex++));
                 }
             }
         }
 
-        // CPUs the player selected that are not currently reachable (network split, unloaded chunk,
-        // dismantled multiblock). The selection is kept rather than silently dropped.
         for (var key : host.getManagedCpus()) {
             if (!seen.contains(key)) {
                 rows.add(new CpuStatus(key, "CPU @ " + key.toShortString(), 0, 0, true, true,
@@ -215,7 +192,6 @@ public class SchedulerMenu extends AbstractContainerMenu {
     private static CpuStatus unsupported(ICraftingCPU cpu, int index) {
         var name = cpu.getName() != null ? cpu.getName().getString()
                 : Component.translatable("gui.ae2_crafting_scheduler.foreign_cpu").getString();
-        // Synthetic key: foreign CPUs have no block position and can never be selected anyway.
         return new CpuStatus(new BlockPos(0, -1 - index, 0), name, cpu.getAvailableStorage(),
                 cpu.getCoProcessors(), false, false, ManagedCpuState.UNSUPPORTED, "", 0, 0, 0, "", 0, 0, "");
     }
