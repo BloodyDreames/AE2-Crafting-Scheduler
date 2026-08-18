@@ -1,0 +1,94 @@
+plugins {
+    id 'java-library'
+    id 'fabric-loom' version '1.7.4'
+}
+
+base {
+    archivesName = "${mod_id}"
+}
+
+// Minecraft 1.20.1 runs on Java 17.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+sourceSets.main.java.srcDirs += [rootProject.ext.commonJava, rootProject.ext.mc1201Java]
+sourceSets.main.resources.srcDirs += [rootProject.ext.commonResources, rootProject.ext.mc1201Resources]
+
+repositories {
+    maven {
+        name = 'ModMaven (AE2)'
+        url = 'https://modmaven.dev'
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version_1201}"
+    // AE2 is built against Mojang's official mappings on every loader, and so is the shared code
+    // in this repository, so Loom uses them here too rather than Yarn.
+    mappings loom.officialMojangMappings()
+
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    modImplementation "appeng:appliedenergistics2-fabric:${ae2_version_1201}"
+
+    // AE2 ships Team Reborn's Energy API as a nested jar. Loom does not put the nested mods of a
+    // dependency on the development classpath, so it has to be declared explicitly to launch.
+    // It is bundled inside AE2 at runtime, so this is a development-only dependency.
+    modRuntimeOnly "teamreborn:energy:${team_reborn_energy_version}"
+}
+
+loom {
+    mixin {
+        // Must match the `refmap` field in the mixin config; Loom's default is
+        // `<archivesBaseName>-refmap.json`, which would not.
+        defaultRefmapName = "${mod_id}.refmap.json"
+    }
+
+    runs {
+        gameTestServer {
+            server()
+            name = 'Game Test Server'
+            source sourceSets.main
+            runDir '../run-fabric-gametest'
+            vmArg '-Dfabric-api.gametest'
+            vmArg '-Dappeng.tests=true'
+        }
+    }
+}
+
+tasks.named('compileJava', JavaCompile) {
+    // Every mixin here targets an AE2 class. AE2's own members are not remapped between the named
+    // and intermediary namespaces, so the Mixin annotation processor legitimately finds no mapping
+    // for them and would otherwise fail the build. Members inherited from Minecraft do resolve --
+    // see the generated refmap, which carries the `broadcastChanges` entry.
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_TARGET=WARNING'
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_CLASS=WARNING'
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_ACCESSOR=WARNING'
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_CTOR=WARNING'
+}
+
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [minecraft_version_range: ">=${minecraft_version_1201} <1.21",
+                             fabric_loader_version  : fabric_loader_version,
+                             mod_id                 : mod_id,
+                             mod_name               : mod_name,
+                             mod_license            : mod_license,
+                             mod_version            : mod_version,
+                             mod_authors            : mod_authors,
+                             mod_description        : mod_description,
+                             ae2_version_range      : ">=${ae2_version_1201}"]
+    inputs.properties replaceProperties
+    filesMatching('fabric.mod.json') {
+        expand replaceProperties
+    }
+}
+
+tasks.named('jar', Jar) {
+    // Game test plots are a development tool; they pull in AE2's test framework and must never
+    // reach a release jar.
+    exclude 'dev/BloodyDreamsWork/ae2_scheduler/testplots/**'
+}
+
+tasks.named('remapJar') {
+    archiveClassifier = ''
+    archiveVersion = "${mod_version}+mc${minecraft_version_1201}-fabric"
+}

@@ -1,10 +1,31 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
-        maven { url = 'https://maven.neoforged.net/releases' }
+        maven {
+            name = 'NeoForged'
+            url = 'https://maven.neoforged.net/releases'
+        }
+        maven {
+            name = 'MinecraftForge'
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            name = 'FabricMC'
+            url = 'https://maven.fabricmc.net/'
+        }
     }
 }
 
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
+
+rootProject.name = 'AE2CraftingScheduler'
+
+// One project per production artifact. `common`, `mc1201` and `mc1211` are plain source
+// directories that these projects pull into their own source sets -- they are deliberately not
+// Gradle projects, because each Minecraft version needs them compiled against different
+// Minecraft and AE2 jars.
+include 'neoforge'
+include 'forge'
+include 'fabric'

@@ -1,0 +1,95 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.143'
+}
+
+base {
+    archivesName = "${mod_id}"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets.main.java.srcDirs += [rootProject.ext.commonJava, rootProject.ext.mc1211Java]
+sourceSets.main.resources.srcDirs += [rootProject.ext.commonResources, rootProject.ext.mc1211Resources]
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+            gameDirectory = project.file('../run')
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = project.file('../run-server')
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = project.file('../run-gametest')
+            systemProperty 'neoforge.enabledGameTestNamespaces', "${project.mod_id},ae2"
+            systemProperty 'appeng.tests', 'true'
+        }
+
+        data {
+            data()
+            gameDirectory = project.file('../run-data')
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output',
+                    file('src/generated/resources/').getAbsolutePath(),
+                    '--existing', rootProject.ext.commonResources.getAbsolutePath()
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+sourceSets.main.resources.srcDir 'src/generated/resources'
+
+dependencies {
+    implementation "org.appliedenergistics:appliedenergistics2:${ae2_version_1211}"
+    runtimeOnly "org.appliedenergistics:guideme:${guideme_version}"
+}
+
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [minecraft_version      : minecraft_version_1211,
+                             minecraft_version_range: minecraft_version_range_1211,
+                             neo_version            : neo_version,
+                             neo_version_range      : neo_version_range,
+                             loader_version_range   : loader_version_range,
+                             mod_id                 : mod_id,
+                             mod_name               : mod_name,
+                             mod_license            : mod_license,
+                             mod_version            : mod_version,
+                             mod_authors            : mod_authors,
+                             mod_description        : mod_description,
+                             ae2_version_range      : ae2_version_range_1211]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.named('jar', Jar) {
+    archiveClassifier = ''
+    archiveVersion = "${mod_version}+mc${minecraft_version_1211}-neoforge"
+    // Game test plots are a development tool; they pull in AE2's test framework and must never
+    // reach a release jar.
+    exclude 'dev/BloodyDreamsWork/ae2_scheduler/testplots/**'
+}
