@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "QEQ",
+    "CUC",
+    "QFQ"
+  ],
+  "key": {
+    "Q": {
+      "item": "ae2:quartz_glass"
+    },
+    "E": {
+      "item": "ae2:engineering_processor"
+    },
+    "C": {
+      "item": "ae2:calculation_processor"
+    },
+    "U": {
+      "item": "ae2:crafting_unit"
+    },
+    "F": {
+      "item": "ae2:fluix_crystal"
+    }
+  },
+  "result": {
+    "item": "ae2_crafting_scheduler:crafting_scheduler",
+    "count": 1
+  }
+}

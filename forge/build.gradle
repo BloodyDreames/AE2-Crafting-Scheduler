@@ -1,0 +1,113 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev.legacyforge' version '2.0.143'
+}
+
+base {
+    archivesName = "${mod_id}"
+}
+
+// Minecraft 1.20.1 runs on Java 17.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+sourceSets.main.java.srcDirs += [rootProject.ext.commonJava, rootProject.ext.mc1201Java]
+sourceSets.main.resources.srcDirs += [rootProject.ext.commonResources, rootProject.ext.mc1201Resources]
+
+legacyForge {
+    version = project.forge_version
+
+    runs {
+        client {
+            client()
+            gameDirectory = project.file('../run-forge')
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = project.file('../run-forge-server')
+        }
+
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = project.file('../run-forge-gametest')
+            systemProperty 'forge.enabledGameTestNamespaces', "${project.mod_id},ae2"
+            systemProperty 'appeng.tests', 'true'
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// Mixin refmap. Production Forge jars use SRG member names, so any mixin that targets a
+// Minecraft-derived member needs a refmap to resolve at runtime -- here that is
+// `CraftConfirmMenu.broadcastChanges`, which overrides `AbstractContainerMenu.broadcastChanges`.
+mixin {
+    config "${mod_id}.mixins.json"
+    add sourceSets.main, "${mod_id}.refmap.json"
+}
+
+tasks.named('compileJava', JavaCompile) {
+    // Every mixin here targets an AE2 class. AE2's own members are not obfuscated, so the Mixin
+    // annotation processor legitimately finds no SRG mapping for them and would otherwise fail the
+    // build. Only members inherited from Minecraft need remapping, and those do resolve -- see the
+    // generated refmap, which contains exactly the `broadcastChanges` entry.
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_TARGET=WARNING'
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_CLASS=WARNING'
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_ACCESSOR=WARNING'
+    options.compilerArgs << '-AMSG_NO_OBFDATA_FOR_CTOR=WARNING'
+}
+
+repositories {
+    maven {
+        name = 'MinecraftForge'
+        url = 'https://maven.minecraftforge.net/'
+    }
+}
+
+dependencies {
+    // `modImplementation` is ModDevGradle's remapping configuration: AE2's published Forge jar
+    // carries SRG member names and is remapped to the development mappings on the way in.
+    modImplementation "appeng:appliedenergistics2-forge:${ae2_version_1201}"
+
+    // Generates the refmap during compilation. Forge 1.20.1 ships Mixin 0.8.5.
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [minecraft_version      : minecraft_version_1201,
+                             minecraft_version_range: minecraft_version_range_1201,
+                             forge_version          : forge_version,
+                             forge_version_range    : forge_version_range,
+                             loader_version_range   : forge_loader_version_range,
+                             mod_id                 : mod_id,
+                             mod_name               : mod_name,
+                             mod_license            : mod_license,
+                             mod_version            : mod_version,
+                             mod_authors            : mod_authors,
+                             mod_description        : mod_description,
+                             ae2_version_range      : ae2_version_range_1201]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+legacyForge.ideSyncTask generateModMetadata
+
+tasks.named('jar', Jar) {
+    // The dev jar keeps development mappings; the release artifact is `reobfJar`, which
+    // ModDevGradle registers automatically and which remaps members to SRG.
+    archiveClassifier = 'dev'
+    exclude 'dev/BloodyDreamsWork/ae2_scheduler/testplots/**'
+}
+
+tasks.named('reobfJar') {
+    archiveClassifier = ''
+    archiveVersion = "${mod_version}+mc${minecraft_version_1201}-forge"
+}

@@ -1,5 +1,5 @@
-/.gradle/
-/build/
+.gradle/
+build/
 /out/
 /repo/
 /.idea/
@@ -12,10 +12,16 @@
 /run-server/
 /run-gametest/
 /run-data/
+/run-forge/
+/run-forge-server/
+/run-forge-gametest/
+/run-fabric/
+/run-fabric-server/
+/run-fabric-gametest/
 /logs/
 /crash-reports/
 /123/
-/src/generated/
+src/generated/
 /libs/
 .env
 .env.*
